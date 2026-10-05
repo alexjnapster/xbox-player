@@ -365,8 +365,9 @@ final class Player: NSObject, NSApplicationDelegate, NSWindowDelegate, @unchecke
             self.saveDiagnostics(report)
 
         }
+        // Stable AVFoundation notification names work with both old and new Swift SDK imports.
         for session in [videoSession, audioSession] {
-            observations.append(NotificationCenter.default.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: session, queue: .main) { [weak self] note in
+            observations.append(NotificationCenter.default.addObserver(forName: Notification.Name("AVCaptureSessionRuntimeErrorNotification"), object: session, queue: .main) { [weak self] note in
                 let error = note.userInfo?[AVCaptureSessionErrorKey] as? Error
                 guard let self = self else { return }
                 if session === self.videoSession {
@@ -377,7 +378,7 @@ final class Player: NSObject, NSApplicationDelegate, NSWindowDelegate, @unchecke
                 self.status.stringValue = "Capture error: \(error?.localizedDescription ?? "Reconnect the card")"
             })
         }
-        observations.append(NotificationCenter.default.addObserver(forName: AVCaptureDevice.wasDisconnectedNotification, object: nil, queue: .main) { [weak self] note in
+        observations.append(NotificationCenter.default.addObserver(forName: Notification.Name("AVCaptureDeviceWasDisconnectedNotification"), object: nil, queue: .main) { [weak self] note in
             if let device = note.object as? AVCaptureDevice, device.uniqueID == self?.activeDeviceID {
                 guard let self = self else { return }
                 self.receiving = false; self.lastMetrics = [:]; self.audioAvailable = false
@@ -387,7 +388,7 @@ final class Player: NSObject, NSApplicationDelegate, NSWindowDelegate, @unchecke
                 self.queue.async { self.videoSession.stopRunning(); self.audioSession.stopRunning(); self.video.resetFrame() }
             }
         })
-        observations.append(NotificationCenter.default.addObserver(forName: AVCaptureDevice.wasConnectedNotification, object: nil, queue: .main) { [weak self] note in
+        observations.append(NotificationCenter.default.addObserver(forName: Notification.Name("AVCaptureDeviceWasConnectedNotification"), object: nil, queue: .main) { [weak self] note in
             guard let self = self, !self.capturePaused, let device = note.object as? AVCaptureDevice else { return }
             let savedDevice = self.preferences.string(forKey: "deviceID")
             let matchesSelection = device.uniqueID == self.activeDeviceID || device.uniqueID == savedDevice ||

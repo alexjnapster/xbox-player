@@ -26,6 +26,7 @@ This repository does not claim that every possible error has been eliminated.
 - Failure to check Metal queue/cache creation and capture-session startup results.
 - Camera denial unnecessarily requesting Microphone access; Camera access is now checked first.
 - Missing connection-phase diagnostics and a warning for prolonged connection.
+- New SDK notification member names failing to compile with the macOS 14 build SDK; stable AVFoundation notification names are used instead.
 
 ## Issue reports
 
