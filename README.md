@@ -33,7 +33,7 @@ Builds use a local ad-hoc signature. They are not Apple notarized releases. The 
 ./scripts/test.sh
 ```
 
-Mode selection tests cover highest-FPS priority, fractional/fixed timing, pixel-format preference and unsupported 4K60 rejection. GPU tests exercise the actual NV12 encoder with black/white reference frames at 720p, 1080p, 1440p and 4K. Rendering tests require a working Metal device. They do not certify real 4K60 streaming.
+Mode selection tests cover highest-FPS priority, fractional/fixed timing, pixel-format preference and unsupported 4K60 rejection. GPU tests exercise the actual NV12 encoder with eight fixed color/range vectors at 720p, 1080p, 1440p and 4K, plus asymmetric quadrants for orientation and wide/tall targets for aspect ratio and black bars. Rendering tests require a working Metal device. They do not certify calibrated card/display color or real 4K60 streaming.
 
 ## Controls
 

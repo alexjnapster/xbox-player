@@ -188,32 +188,86 @@ final class VideoView: MTKView, MTKViewDelegate, AVCaptureVideoDataOutputSampleB
         return true
     }
     func verifyRendering() throws {
-        for (width, height) in [(1280,720), (1920,1080), (2560,1440), (3840,2160)] {
-            for brightness: UInt8 in [16,235] {
-                var buffer: CVPixelBuffer?
-                let attributes: [String: Any] = [kCVPixelBufferMetalCompatibilityKey as String: true, kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
-                guard CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, attributes as CFDictionary, &buffer) == kCVReturnSuccess, let frame = buffer else {
-                    throw NSError(domain: "XboxPlayerTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot allocate synthetic NV12 frame"])
-                }
-                CVPixelBufferLockBaseAddress(frame, [])
-                memset(CVPixelBufferGetBaseAddressOfPlane(frame,0), Int32(brightness), CVPixelBufferGetBytesPerRowOfPlane(frame,0)*height)
-                memset(CVPixelBufferGetBaseAddressOfPlane(frame,1), 128, CVPixelBufferGetBytesPerRowOfPlane(frame,1)*height/2)
-                CVPixelBufferUnlockBaseAddress(frame, [])
-                let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
-                descriptor.usage = [.renderTarget]; descriptor.storageMode = .shared
-                guard let target = device!.makeTexture(descriptor: descriptor), let command = commandQueue.makeCommandBuffer() else { throw NSError(domain: "XboxPlayerTests", code: 2) }
-                let pass = MTLRenderPassDescriptor()
-                pass.colorAttachments[0].texture = target; pass.colorAttachments[0].loadAction = .clear; pass.colorAttachments[0].storeAction = .store
-                guard encode(frame: frame, pass: pass, command: command, targetSize: CGSize(width: width,height: height)) else { throw NSError(domain: "XboxPlayerTests", code: 3) }
-                command.commit(); command.waitUntilCompleted()
-                if let error = command.error { throw error }
-                var pixel: [UInt8] = [0,0,0,0]
-                target.getBytes(&pixel, bytesPerRow: 4, from: MTLRegionMake2D(width/2,height/2,1,1), mipmapLevel: 0)
-                guard pixel[3] == 255, pixel.prefix(3).allSatisfy({ brightness == 16 ? $0 <= 2 : $0 >= 253 }) else {
-                    throw NSError(domain: "XboxPlayerTests", code: 4, userInfo: [NSLocalizedDescriptionKey: "NV12 black/white conversion mismatch: \(pixel)"])
+        // Fixed limited-range BT.709 vectors; expected RGB values are independent
+        // of the shader implementation. Tolerance allows eight-bit quantization.
+        typealias Color = (y: UInt8, u: UInt8, v: UInt8, bgra: [UInt8])
+        let colors: [Color] = [
+            (16,128,128,[0,0,0,255]), (235,128,128,[255,255,255,255]),
+            (63,102,240,[0,0,255,255]), (173,42,26,[0,255,0,255]),
+            (32,240,118,[255,0,0,255]), (125,128,128,[127,127,127,255]),
+            (0,128,128,[0,0,0,255]), (255,128,128,[255,255,255,255])
+        ]
+        func makeFrame(_ width: Int, _ height: Int, _ pattern: [Color]) throws -> CVPixelBuffer {
+            var buffer: CVPixelBuffer?
+            let attributes: [String: Any] = [kCVPixelBufferMetalCompatibilityKey as String: true, kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+            guard CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, attributes as CFDictionary, &buffer) == kCVReturnSuccess, let frame = buffer else {
+                throw NSError(domain: "XboxPlayerTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot allocate synthetic NV12 frame"])
+            }
+            CVPixelBufferLockBaseAddress(frame, [])
+            defer { CVPixelBufferUnlockBaseAddress(frame, []) }
+            let y = CVPixelBufferGetBaseAddressOfPlane(frame,0)!.assumingMemoryBound(to: UInt8.self)
+            let uv = CVPixelBufferGetBaseAddressOfPlane(frame,1)!.assumingMemoryBound(to: UInt8.self)
+            let yStride = CVPixelBufferGetBytesPerRowOfPlane(frame,0), uvStride = CVPixelBufferGetBytesPerRowOfPlane(frame,1)
+            for row in 0..<height {
+                for column in 0..<width {
+                    let index = pattern.count == 1 ? 0 : (row < height/2 ? 0 : 2) + (column < width/2 ? 0 : 1)
+                    y[row*yStride+column] = pattern[index].y
                 }
             }
-            print("Metal NV12 rendering passed: \(width)×\(height), black and white reference pixels")
+            for row in 0..<height/2 {
+                for column in 0..<width/2 {
+                    let index = pattern.count == 1 ? 0 : (row < height/4 ? 0 : 2) + (column < width/4 ? 0 : 1)
+                    uv[row*uvStride+column*2] = pattern[index].u
+                    uv[row*uvStride+column*2+1] = pattern[index].v
+                }
+            }
+            return frame
+        }
+        func render(_ frame: CVPixelBuffer, _ width: Int, _ height: Int) throws -> MTLTexture {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: false)
+            descriptor.usage = [.renderTarget]; descriptor.storageMode = .shared
+            guard let target = device!.makeTexture(descriptor: descriptor), let command = commandQueue.makeCommandBuffer() else { throw NSError(domain: "XboxPlayerTests", code: 2) }
+            let pass = MTLRenderPassDescriptor()
+            pass.colorAttachments[0].texture = target; pass.colorAttachments[0].loadAction = .clear; pass.colorAttachments[0].storeAction = .store
+            pass.colorAttachments[0].clearColor = MTLClearColorMake(0,0,0,1)
+            guard encode(frame: frame, pass: pass, command: command, targetSize: CGSize(width: width,height: height)) else { throw NSError(domain: "XboxPlayerTests", code: 3) }
+            command.commit(); command.waitUntilCompleted()
+            if let error = command.error { throw error }
+            return target
+        }
+        func check(_ target: MTLTexture, _ x: Int, _ y: Int, _ expected: [UInt8], _ label: String) throws {
+            var pixel: [UInt8] = [0,0,0,0]
+            target.getBytes(&pixel, bytesPerRow: 4, from: MTLRegionMake2D(x,y,1,1), mipmapLevel: 0)
+            guard pixel[3] == expected[3], zip(pixel.prefix(3),expected.prefix(3)).allSatisfy({ abs(Int($0.0)-Int($0.1)) <= 3 }) else {
+                throw NSError(domain: "XboxPlayerTests", code: 4, userInfo: [NSLocalizedDescriptionKey: "\(label) at \(x),\(y): expected \(expected), got \(pixel)"])
+            }
+        }
+        for (width, height) in [(1280,720), (1920,1080), (2560,1440), (3840,2160)] {
+            for color in colors {
+                let frame = try makeFrame(width,height,[color])
+                let target = try render(frame,width,height)
+                try check(target,width/2,height/2,color.bgra,"BT.709 color/range")
+            }
+            print("Metal NV12 rendering passed: \(width)×\(height), 8 color/range vectors")
+        }
+        let quadrants = [colors[2],colors[3],colors[4],colors[1]]
+        let frame = try makeFrame(64,32,quadrants)
+        for (width,height,left,top,imageWidth,imageHeight) in [(64,32,0,0,64,32),(64,64,0,16,64,32),(128,32,32,0,64,32)] {
+            let target = try render(frame,width,height)
+            for index in 0..<4 {
+                let x = left + imageWidth * (index % 2 == 0 ? 1 : 3) / 4
+                let y = top + imageHeight * (index < 2 ? 1 : 3) / 4
+                try check(target,x,y,quadrants[index].bgra,"Image orientation/aspect")
+            }
+            if top > 0 {
+                try check(target,width/2,top/2,colors[0].bgra,"Top letterbox")
+                try check(target,width/2,height-top/2,colors[0].bgra,"Bottom letterbox")
+            }
+            if left > 0 {
+                try check(target,left/2,height/2,colors[0].bgra,"Left pillarbox")
+                try check(target,width-left/2,height/2,colors[0].bgra,"Right pillarbox")
+            }
+            print("Metal image orientation/aspect passed: \(width)×\(height)")
         }
     }
 
@@ -737,8 +791,13 @@ final class Player: NSObject, NSApplicationDelegate, NSWindowDelegate, @unchecke
 }
 
 if CommandLine.arguments.contains("--test-render") {
-    try VideoView(metalPreview: true).verifyRendering()
-    exit(0)
+    do {
+        try VideoView(metalPreview: true).verifyRendering()
+        exit(0)
+    } catch {
+        FileHandle.standardError.write(Data("Rendering test failed: \(error.localizedDescription)\n".utf8))
+        exit(1)
+    }
 }
 
 if CommandLine.arguments.contains("--test-modes") { verifyModePolicy(); exit(0) }
