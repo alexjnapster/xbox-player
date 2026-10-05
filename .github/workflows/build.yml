@@ -1,0 +1,14 @@
+name: Build and mode policy
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build signed local app
+        run: ./scripts/build.sh
+      - name: Test hardware-aware mode selection
+        run: '"build/Xbox Player.app/Contents/MacOS/Xbox Player" --test-modes'
+# GPU rendering, audio, live capture and latency require local hardware checks.
