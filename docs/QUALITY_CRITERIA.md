@@ -21,6 +21,10 @@ The scope includes actual current-card behavior and correct conditional handling
 
 **Total: 100 points.** Subchecks can be scored separately; a category is not passed merely because its feature exists.
 
+### Optional HDMI-CEC release gate
+
+CEC is requested but not implemented or certified. Before advertising it, satisfy the hardware-specific discovery, target addressing, command/recovery and performance checks in [CEC.md](CEC.md). CEC failures must not interrupt capture/audio. Current-card hardware points require accurately reporting its unverified CEC capability; enabling controls without a verified command path fails that requirement. A future CEC feature must pass the same stability, usability, privacy and performance gates, without changing the 100-point total or awarding points for undocumented hardware claims.
+
 ## Performance preservation gates
 
 Use the same Mac, power mode, card/USB port, capture mode, preview mode, screen geometry, controls and representative scene. Allow warmup; record at least three alternating baseline/candidate runs. Report received/drawn FPS, drops, sample distributions and measurement limitations. A changing game or a short sequential sample is supporting evidence, not final non-regression certification.

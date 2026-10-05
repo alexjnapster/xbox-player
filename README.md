@@ -59,7 +59,9 @@ Diagnostics are local in `~/Library/Application Support/Xbox Player/`: `Last Ses
 
 ## Quality and remaining work
 
-[100-point acceptance criteria](docs/QUALITY_CRITERIA.md), [Xbox settings](docs/XBOX_SETTINGS.md), [research](docs/RESEARCH.md), and [known limits](docs/KNOWN_LIMITS.md).
+[100-point acceptance criteria](docs/QUALITY_CRITERIA.md), [Xbox settings](docs/XBOX_SETTINGS.md), [research](docs/RESEARCH.md), [HDMI-CEC feasibility](docs/CEC.md), and [known limits](docs/KNOWN_LIMITS.md).
+
+HDMI-CEC control is not implemented. This UGREEN card has no verified host CEC control path; a documented USB-CEC adapter and real Xbox/topology tests would be needed for a supported integration. CEC can provide device-control convenience but does not reduce capture latency.
 
 The scorecard is a target, not a certified current score. Physical recovery, long soak, calibrated color, VoiceOver and controller-to-screen timing need the listed checks. Reports must distinguish tested results from hardware-conditional support.
 

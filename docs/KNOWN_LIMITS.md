@@ -4,10 +4,11 @@ This repository does not claim that every possible error has been eliminated.
 
 - Current UGREEN card: 1080p60 and 1440p30 capture. 4K60 requires a different compatible capture device; no sustained 4K60 hardware test has been run.
 - 8-bit SDR NV12 only. HDR transfer functions and tone mapping are not implemented.
-- Native fullscreen/control preferences and pause/resume recovery were checked in build 11. Build 12 adds further error handling; its live validation is in progress while macOS capture permissions are renewed. No performance-preservation certification is claimed for build 12 yet.
+- Native fullscreen/control preferences and pause/resume recovery were checked in build 11. Build 12 is receiving video again after macOS capture permissions were renewed. A short fullscreen check measured approximately 60 FPS and zero reported capture drops; its audio session was active. Live listening, longer gameplay and matched baseline comparisons remain required. No full performance-preservation certification is claimed for build 12 yet.
 - Physical unplug/replug, eight-hour soak, calibrated color/reference patterns, comprehensive VoiceOver use and controller-to-screen latency remain unverified.
 - A card can deliver repeated or black frames while HDMI is absent. The watchdog detects missing frame delivery, not every HDMI signal loss.
 - Output-device changes and audio/video drift require hardware listening checks.
+- HDMI-CEC is not implemented. The card exposes a vendor HID interface, but its command protocol and any CEC access are unverified. Dedicated adapter integration remains conditional on hardware/topology tests; see [CEC.md](CEC.md).
 - Local signatures are ad-hoc, not notarized. A rebuilt executable changes its designated code requirement, which can invalidate earlier Camera/Microphone grants. macOS may need fresh permission approval even when an old entry looks enabled. Do not edit the privacy database or broaden signing requirements to bypass this protection.
 - Source currently builds in Swift 5 language mode. Strict Swift 6 concurrency checks report isolation warnings; a Swift 6 migration is not complete. Current capture and timing state uses serial queues and locks, but this is not a comprehensive thread-sanitizer certification.
 
